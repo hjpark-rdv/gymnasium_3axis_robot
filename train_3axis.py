@@ -86,6 +86,9 @@ class CartesianRobotEnv(gym.Env):
     def __init__(self):
         super(CartesianRobotEnv, self).__init__()
 
+        
+        self.step_counter = 0
+        
         # 관절의 위치 한계를 정의합니다.
         self.joint_limits = {
             'joint_x': (-1.0, 1.0),
@@ -177,11 +180,25 @@ class CartesianRobotEnv(gym.Env):
             p.resetJointState(self.robot_id, joint_index, targetValue=initial_position)
 
         return self._get_observation(), {}
+    def _update_target_position(self):
+        """
+        목표 좌표를 무작위로 변경하고, 시각적 오브젝트를 업데이트하는 함수
+        """
+        self.target_position = np.random.uniform(low=[0.1, 0.1, 0.1], high=[0.9, 0.9, 0.9])
 
+        # ✅ 기존 목표 오브젝트가 있으면 새 위치로 이동
+        p.resetBasePositionAndOrientation(self.target_visual_id, self.target_position, [0, 0, 0, 1])
+
+        print(f"🎯 목표 위치 변경됨: {self.target_position}")  # 디버깅용 출력
     def step(self, action):
-        """
-        X, Y, Z가 부모 링크에서 분리되지 않도록, 부모 링크의 위치를 강제 반영하여 설정.
-        """
+        
+        # ✅ 현재 스텝 증가
+        self.step_counter += 1  
+
+        # ✅ 일정 간격(예: 500 스텝)마다 목표 위치 변경
+        if self.step_counter % 500 == 0:
+            self._update_target_position()
+
         # 현재 각 조인트의 상태(위치)를 가져옴
         joint_states = p.getJointStates(self.robot_id, list(self.joint_indices.values()))
         current_positions = {name: joint_states[i][0] for i, name in enumerate(self.joint_names)}
