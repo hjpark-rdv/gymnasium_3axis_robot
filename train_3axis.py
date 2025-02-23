@@ -49,6 +49,10 @@ class CartesianRobotEnv(gym.Env):
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0, 0, -9.81)
 
+        # p.connect(p.GUI)
+        # p.setAdditionalSearchPath(pybullet_data.getDataPath())
+        plane_id = p.loadURDF("plane.urdf")
+
         # 로봇 URDF 파일을 로드합니다.
  # self.robot_id = p.loadURDF("robot_description/3dof_cartesian_robot.urdf")
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -58,13 +62,6 @@ class CartesianRobotEnv(gym.Env):
         # 각 관절의 인덱스를 저장합니다.
         self.joint_indices = {self.joint_names[i]: i for i in range(self.num_joints)}
 
-    # def reset(self):
-    #     # 모든 관절을 초기 위치로 재설정합니다.
-    #     for joint_name, joint_index in self.joint_indices.items():
-    #         p.resetJointState(self.robot_id, joint_index, self.joint_positions[joint_name])
-
-    #     # 초기 관찰값을 반환합니다.
-    #     return self._get_observation(), {}
     
     def reset(self, seed=None, options=None):
         # 상위 클래스의 reset 메서드 호출하여 시드 설정
@@ -77,29 +74,69 @@ class CartesianRobotEnv(gym.Env):
         return self.state, {}
 
     def step(self, action):
-        # 각 관절에 대해 주어진 액션에 따라 힘을 적용합니다.
-        for i, joint_name in enumerate(self.joint_names):
+        """
+        X, Y, Z가 부모 링크에서 분리되지 않으면서, 개별적으로 움직일 수 있도록 속도를 조정.
+        """
+        # 현재 부모 링크들의 위치를 가져옴
+        z_position = p.getJointState(self.robot_id, self.joint_indices["joint_z"])[0]
+        y_position = p.getJointState(self.robot_id, self.joint_indices["joint_y"])[0]
+        x_position = p.getJointState(self.robot_id, self.joint_indices["joint_x"])[0]
+
+        # 액션값을 적절한 속도로 변환
+        z_velocity = action[2] * 0.2  # 속도 조절
+        y_velocity = action[1] * 0.2
+        x_velocity = action[0] * 0.2
+
+        for joint_name in self.joint_names:
             joint_index = self.joint_indices[joint_name]
-            force = action[i]
+
+            if joint_name == "joint_z":
+                velocity = z_velocity
+                force = 200
+            elif joint_name == "joint_y":
+                velocity = y_velocity  # Y축은 독립적으로 움직이지만, Z의 영향을 받음
+                force = 150
+            else:  # joint_x
+                velocity = x_velocity  # X축은 독립적으로 움직이지만, Y의 영향을 받음
+                force = 100
+
             p.setJointMotorControl2(
                 bodyUniqueId=self.robot_id,
                 jointIndex=joint_index,
-                controlMode=p.TORQUE_CONTROL,
+                controlMode=p.VELOCITY_CONTROL,
+                targetVelocity=velocity,
                 force=force
             )
 
-        # 시뮬레이션을 한 스텝 진행합니다.
+        # 시뮬레이션 한 스텝 진행
         p.stepSimulation()
 
-        # 새로운 관찰값을 얻습니다.
-        observation = self._get_observation()
+        # 디버깅용 현재 상태 출력 (속도가 과도하지 않은지 확인)
+        joint_states = {
+            name: p.getJointState(self.robot_id, self.joint_indices[name])[0]
+            for name in self.joint_names
+        }
+        print(f"Joint States: {joint_states}")
 
-        # 보상과 에피소드 종료 여부를 결정합니다.
+        observation = self._get_observation()
         reward = self._compute_reward(observation)
         terminated = self._is_terminated(observation)
-        truncated = False  # 시간 제한 등의 이유로 에피소드가 중단되지 않는다고 가정합니다.
+        truncated = False
 
         return observation, reward, terminated, truncated, {}
+
+
+
+
+
+        # 현재 조인트 상태 출력 (디버깅용)
+        for i, joint_name in enumerate(self.joint_names):
+            joint_index = self.joint_indices[joint_name]
+            joint_state = p.getJointState(self.robot_id, joint_index)
+            print(f"Joint {joint_name} - Position: {joint_state[0]:.2f}, Velocity: {joint_state[1]:.2f}")
+
+        return observation, reward, terminated, truncated, {}
+
 
     def _get_observation(self):
         # 각 관절의 위치와 속도를 관찰값으로 반환합니다.

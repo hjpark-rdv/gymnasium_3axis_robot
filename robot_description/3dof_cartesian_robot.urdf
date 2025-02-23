@@ -1,13 +1,9 @@
 <robot name="3dof_cartesian_robot">
   <!-- Base Link -->
   <link name="base_link">
-    <inertial>
-      <mass value="1.0"/>
-      <inertia ixx="0.1" ixy="0.0" ixz="0.0" iyy="0.1" iyz="0.0" izz="0.1"/>
-    </inertial>
     <visual>
       <geometry>
-        <box size="0.1 0.1 0.1"/>  <!-- 고정된 기본 베이스 -->
+        <box size="0.1 0.1 0.1"/>
       </geometry>
       <material name="grey">
         <color rgba="0.5 0.5 0.5 1"/>
@@ -15,47 +11,11 @@
     </visual>
   </link>
 
-  <!-- X 축 이동 링크 -->
-  <link name="link_x">
-    <inertial>
-      <mass value="1.0"/>
-      <inertia ixx="0.1" ixy="0.0" ixz="0.0" iyy="0.1" iyz="0.0" izz="0.1"/>
-    </inertial>
-    <visual>
-      <geometry>
-        <box size="1.0 0.03 0.03"/>  <!-- 길이 1m, 두께 3cm -->
-      </geometry>
-      <material name="red">
-        <color rgba="1 0 0 1"/>
-      </material>
-    </visual>
-  </link>
-
-  <!-- Y 축 이동 링크 -->
-  <link name="link_y">
-    <inertial>
-      <mass value="1.0"/>
-      <inertia ixx="0.1" ixy="0.0" ixz="0.0" iyy="0.1" iyz="0.0" izz="0.1"/>
-    </inertial>
-    <visual>
-      <geometry>
-        <box size="0.03 1.0 0.03"/>  <!-- 길이 1m, 두께 3cm -->
-      </geometry>
-      <material name="green">
-        <color rgba="0 1 0 1"/>
-      </material>
-    </visual>
-  </link>
-
   <!-- Z 축 이동 링크 -->
   <link name="link_z">
-    <inertial>
-      <mass value="1.0"/>
-      <inertia ixx="0.1" ixy="0.0" ixz="0.0" iyy="0.1" iyz="0.0" izz="0.1"/>
-    </inertial>
     <visual>
       <geometry>
-        <box size="0.03 0.03 1.0"/>  <!-- 길이 1m, 두께 3cm -->
+        <box size="0.03 0.03 1.0"/>
       </geometry>
       <material name="blue">
         <color rgba="0 0 1 1"/>
@@ -63,30 +23,52 @@
     </visual>
   </link>
 
-  <!-- X 축 조인트 -->
-  <joint name="joint_x" type="prismatic">
-    <parent link="base_link"/>
-    <child link="link_x"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="1 0 0"/>  <!-- X 축 이동 -->
-    <limit lower="0" upper="1" effort="100" velocity="0.5"/>
-  </joint>
+  <!-- Y 축 이동 링크 -->
+  <link name="link_y">
+    <visual>
+      <geometry>
+        <box size="0.03 1.0 0.03"/>
+      </geometry>
+      <material name="green">
+        <color rgba="0 1 0 1"/>
+      </material>
+    </visual>
+  </link>
 
-  <!-- Y 축 조인트 -->
-  <joint name="joint_y" type="prismatic">
-    <parent link="link_x"/>
-    <child link="link_y"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>  <!-- Y 축 이동 -->
-    <limit lower="0" upper="1" effort="100" velocity="0.5"/>
-  </joint>
+  <!-- X 축 이동 링크 -->
+  <link name="link_x">
+    <visual>
+      <geometry>
+        <box size="1.0 0.03 0.03"/>
+      </geometry>
+      <material name="red">
+        <color rgba="1 0 0 1"/>
+      </material>
+    </visual>
+  </link>
 
-  <!-- Z 축 조인트 -->
+  <!-- 조인트 설정 -->
   <joint name="joint_z" type="prismatic">
-    <parent link="link_y"/>
+    <parent link="base_link"/>
     <child link="link_z"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/>  <!-- Z 축 이동 -->
+    <axis xyz="0 0 1"/>
+    <limit lower="0" upper="1" effort="500" velocity="0.5"/>
+  </joint>
+
+  <joint name="joint_y" type="prismatic">
+    <parent link="link_z"/>  <!-- Z에 연결 -->
+    <child link="link_y"/>
+    <origin xyz="0 0 0.5" rpy="0 0 0"/>  <!-- 부모 위치에서 시작 -->
+    <axis xyz="0 1 0"/>
+    <limit lower="0" upper="1" effort="100" velocity="0.5"/>
+  </joint>
+
+  <joint name="joint_x" type="prismatic">
+    <parent link="link_y"/>  <!-- Y에 연결 -->
+    <child link="link_x"/>
+    <origin xyz="0 0.5 0" rpy="0 0 0"/>  <!-- 부모 위치에서 시작 -->
+    <axis xyz="1 0 0"/>
     <limit lower="0" upper="1" effort="100" velocity="0.5"/>
   </joint>
 </robot>
