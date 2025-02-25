@@ -30,7 +30,8 @@ class ScaraEnv(gym.Env):
         self.render_mode = render_mode
         # 4개의 관절 제어 (2 revolute, 1 prismatic, 1 revolute)
         self.action_space = spaces.Box(low=-np.pi, high=np.pi, shape=(4,), dtype=np.float32)
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(8,), dtype=np.float32)
+        # 기존 관절 상태 (위치 4 + 속도 4 = 8) + target_pos (3) → 총 11차원
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(11,), dtype=np.float32)
         # 초기 목표 엔드 이펙터 위치 (나중에 reset에서 변경됨)
         self.target_pos = np.array([0.5, 0.0, 0.2])
         self.physics_client = None
@@ -39,7 +40,7 @@ class ScaraEnv(gym.Env):
         self.joint_limits = []    # 관절 한계 (lower, upper)
         # 학습 도중 목표 위치를 변경하기 위한 스텝 카운터 및 업데이트 주기
         self.step_count = 0
-        self.target_update_interval = 10000000  # simulation 스텝 기준, 필요에 따라 조절
+        self.target_update_interval = 1000  # simulation 스텝 기준, 필요에 따라 조절
         self.consecutive_close_steps = 0  # 0.2m 이내로 근접한 상태를 몇 스텝 연속 유지했는지 카운팅
 
         self._connect()
@@ -58,8 +59,8 @@ class ScaraEnv(gym.Env):
         p.setGravity(0, 0, -9.81)
         p.loadURDF("plane.urdf")
         
-        # 로봇이 도달 가능한 범위를 고려한 랜덤 목표 위치 설정 (예시)
-        x_min, x_max = 0.4, 0.87
+        # 로봇이 도달 가능한 범위를 고려한 랜덤 목표 위치 설정 
+        x_min, x_max = 0.0, 0.87
         y_min, y_max = -0.87, 0.87
         z_min, z_max = 0.21, 0.51
         self.target_pos = np.array([
@@ -111,7 +112,11 @@ class ScaraEnv(gym.Env):
         joint_states = p.getJointStates(self.robot, self.joint_indices)
         joint_positions = [state[0] for state in joint_states]
         joint_velocities = [state[1] for state in joint_states]
-        return np.array(joint_positions + joint_velocities, dtype=np.float32)
+        # 관절 상태와 함께 현재 목표 위치(self.target_pos)를 observation에 포함합니다.
+        return np.concatenate((
+            np.array(joint_positions + joint_velocities, dtype=np.float32),
+            self.target_pos
+        ))
     
     def get_link_index_by_name(self, name):
         num_joints = p.getNumJoints(self.robot)
@@ -137,11 +142,11 @@ class ScaraEnv(gym.Env):
             if self.render_mode:
                 time.sleep(1.0/240.0)
         # 누적 스텝 수 업데이트 (10 step마다 호출되므로)
-        self.step_count += 10
+        self.step_count += 1
 
         # 주기적으로 목표 위치 업데이트
         if self.step_count % self.target_update_interval == 0:
-            x_min, x_max = 0.4, 0.87
+            x_min, x_max = 0.0, 0.87
             y_min, y_max = -0.87, 0.87
             z_min, z_max = 0.21, 0.51
             new_target = np.array([
@@ -149,6 +154,7 @@ class ScaraEnv(gym.Env):
                 np.random.uniform(y_min, y_max),
                 np.random.uniform(z_min, z_max)
             ])
+            self.step_count = 0
             self.target_pos = new_target
             # 목표 오브젝트의 위치를 업데이트
             p.resetBasePositionAndOrientation(self.target_body, self.target_pos.tolist(), [0, 0, 0, 1])
@@ -233,7 +239,7 @@ def main():
     args = parser.parse_args()
 
     env = ScaraEnv(render_mode=False)
-    callback = LivePlotCallback(update_freq=1000)
+    callback = LivePlotCallback(update_freq=100)
     # if args.continue_training:
     #     if os.path.exists("scara_model.zip"):
     #         model = PPO.load("scara_model", env=env)
@@ -269,7 +275,7 @@ def main():
         max_grad_norm=0.5,        # 최대 기울기 정규화 값으로, 기울기 폭주 방지에 도움을 줍니다.
         device="cuda"             # GPU 사용. GPU가 없다면 "cpu"로 변경하세요.
     )
-    model.learn(total_timesteps=300000, callback=callback)
+    model.learn(total_timesteps=2000000, callback=callback)
     model.save("scara_model")
     env.close()
 
