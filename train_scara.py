@@ -19,6 +19,8 @@ from datetime import datetime
 import csv
 import argparse
 
+from stable_baselines3.common.vec_env import SubprocVecEnv
+
 DBG_GRAPH_DISPLAY = True
 
 # SCARA 로봇 환경 정의 (PyBullet 기반)
@@ -232,28 +234,23 @@ class LivePlotCallback(BaseCallback):
                 plt.pause(0.1)
         return True
 
+def make_env(rank):
+    def _init():
+        env = ScaraEnv(render_mode=False)
+        return env
+    return _init
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--continue_training", action="store_true",
                         help="Continue training from a saved model")
     args = parser.parse_args()
+    
+    num_cpu = 10  # 사용 가능한 CPU 코어 수에 따라 설정
 
-    env = ScaraEnv(render_mode=False)
+    env = SubprocVecEnv([make_env(i) for i in range(num_cpu)])
+    # env = ScaraEnv(render_mode=False)
     callback = LivePlotCallback(update_freq=100)
-    # if args.continue_training:
-    #     if os.path.exists("scara_model.zip"):
-    #         model = PPO.load("scara_model", env=env)
-    #         print("Loaded saved model, continuing training...")
-    #         model.learn(total_timesteps=10000000, reset_num_timesteps=False, callback=callback)
-    #         model.save("scara_model_continue")
-    #         env.close()
-    #     else:
-    #         print("No saved model found. Starting new training.")
-    #         model = PPO("MlpPolicy", env, verbose=1, tensorboard_log="./logs/")
-    #         model.learn(total_timesteps=10000000, callback=callback)
-    #         model.save("scara_model")
-    #         env.close()
-    # else:
 
     print("Starting new training...")
     # model = PPO("MlpPolicy", env, verbose=1, tensorboard_log="./logs/", device="cuda")
@@ -275,7 +272,8 @@ def main():
         max_grad_norm=0.5,        # 최대 기울기 정규화 값으로, 기울기 폭주 방지에 도움을 줍니다.
         device="cuda"             # GPU 사용. GPU가 없다면 "cpu"로 변경하세요.
     )
-    model.learn(total_timesteps=2000000, callback=callback)
+    # model.learn(total_timesteps=2000000, callback=callback)
+    model.learn(total_timesteps=2000000)
     model.save("scara_model")
     env.close()
 
